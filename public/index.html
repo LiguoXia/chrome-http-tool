@@ -3428,7 +3428,7 @@ async function executeRequest({ title, method, url, bodyText, paramType, from, a
     const logEntry = {
       title,
       request: built.requestDesc,
-      response: displayText.slice(0, 900),
+      response: displayText,
       status: result.status || 0,
       duration: result.duration,
       ok: result.ok,
