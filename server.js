@@ -8,6 +8,7 @@
 const http = require("http");
 const https = require("https");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { URL } = require("url");
 
@@ -689,9 +690,12 @@ const server = http.createServer((req, res) => {
 });
 
 ensureData();
-server.listen(PORT, "127.0.0.1", () => {
+server.listen(PORT, "0.0.0.0", () => {
   console.log("HTTP Tool server running:");
   console.log("  Local:   http://127.0.0.1:" + PORT);
+  for (const ip of lanIPs()) {
+    console.log("  Network: http://" + ip + ":" + PORT);
+  }
   console.log("  Data dir: " + DATA_DIR);
 });
 server.on("error", (err) => {
@@ -702,3 +706,15 @@ server.on("error", (err) => {
   }
   process.exit(1);
 });
+
+/** 获取本机所有局域网 IPv4 地址（用于打印可访问地址） */
+function lanIPs() {
+  const list = [];
+  const ifaces = os.networkInterfaces();
+  for (const name of Object.keys(ifaces)) {
+    for (const iface of ifaces[name]) {
+      if (iface.family === "IPv4" && !iface.internal) list.push(iface.address);
+    }
+  }
+  return list;
+}
