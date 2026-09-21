@@ -2276,7 +2276,7 @@ function renderGlobalSummary() {
   });
 }
 
-let expandedLogIndex = 0;
+let expandedLogIndex = -1; // 历史时间线默认全部收起（最新内容已在「最后请求/响应」卡片展示，不重复）
 function renderLogs() {
   const box = $("requestLog");
   if (!sceneData.logs.length) {
@@ -3436,7 +3436,7 @@ async function executeRequest({ title, method, url, bodyText, paramType, from, a
     };
     sceneData.logs.push(logEntry);
     sceneData.logs = sceneData.logs.slice(-30);
-    expandedLogIndex = 0; // 新日志默认展开最新一条
+    expandedLogIndex = -1; // 新日志到来时保持收起，由用户点击展开
     // 完整历史落盘：data/logs/{场景ID}/{环境ID}/年-月/年-月-日.jsonl
     API.logAppend(meta.currentSceneId, sceneData.currentEnvId, logEntry);
   }
