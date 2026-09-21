@@ -1,0 +1,19 @@
+# 本地工作记忆（不发布）
+.workbuddy/
+
+# 用户数据（运行时自动创建，不入库）
+data/
+
+# .NET 构建产物
+desktop/bin/
+desktop/obj/
+desktop/dist/
+desktop/.webview2/
+
+# 调试文件
+*.pdb
+*.user
+
+# 系统文件
+.DS_Store
+Thumbs.db
