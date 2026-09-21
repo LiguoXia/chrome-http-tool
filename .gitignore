@@ -17,3 +17,5 @@ desktop/.webview2/
 # 系统文件
 .DS_Store
 Thumbs.db
+# 发布包
+*.zip
