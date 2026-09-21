@@ -62,6 +62,11 @@ internal sealed class AppServer
     {
         EnsureData();
         _host = Host.CreateDefaultBuilder()
+            .ConfigureLogging(logging =>
+            {
+                logging.ClearProviders();
+                logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Error);
+            })
             .ConfigureWebHostDefaults(builder =>
             {
                 builder.UseUrls("http://127.0.0.1:" + _port);
@@ -69,10 +74,18 @@ internal sealed class AppServer
             })
             .Build();
         _host.Start();
+        // 轻量周期回收：低频触发代际 GC，保持长期运行内存水位稳定
+        _gcTimer = new Timer(_ =>
+        {
+            try { GC.Collect(1, GCCollectionMode.Optimized, false); } catch { /* 忽略 */ }
+        }, null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2));
     }
+
+    private Timer _gcTimer;
 
     public void Stop()
     {
+        try { _gcTimer?.Dispose(); } catch { /* 忽略 */ }
         try { _host?.StopAsync(TimeSpan.FromSeconds(3)).Wait(); }
         catch { /* 忽略 */ }
     }
@@ -310,13 +323,8 @@ internal sealed class AppServer
         };
 
         // logs（最多保留 30 条）
+        // 日志历史不再随场景文件持久化（完整记录按天写入 data/logs），减小保存体积
         var logs = new JsonArray();
-        if (d["logs"] is JsonArray logArr)
-        {
-            int skip = Math.Max(0, logArr.Count - 30);
-            for (int i = skip; i < logArr.Count; i++)
-                if (logArr[i] is JsonObject lo) logs.Add(lo.DeepClone());
-        }
 
         return new JsonObject
         {

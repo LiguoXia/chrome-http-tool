@@ -1585,6 +1585,11 @@ const API = {
       body: JSON.stringify({ sceneId, envId, entry })
     }).catch(() => { /* 日志落盘失败不阻断请求 */ });
   },
+  async getLogs(sceneId, envId, date) {
+    const r = await fetch("/api/logs?sceneId=" + encodeURIComponent(sceneId) +
+      "&envId=" + encodeURIComponent(envId) + "&date=" + encodeURIComponent(date));
+    return r.json();
+  },
   async proxy(payload) {
     const r = await fetch("/api/proxy", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -1629,12 +1634,16 @@ function queueSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(flushSave, 400);
 }
+/** 构建持久化载荷：logs 不随场景文件保存（完整历史在 data/logs 按天落盘），大幅减小保存体积 */
+function scenePayload() {
+  return { ...sceneData, logs: [] };
+}
 async function flushSave() {
   if (!dirty || !sceneMeta) return;
   dirty = false;
   syncEnvConfig();
   try {
-    await API.saveScene(sceneMeta.id, sceneData);
+    await API.saveScene(sceneMeta.id, scenePayload());
     setSaveIndicator("saved", "已保存 " + new Date().toLocaleTimeString("zh-CN", { hour12: false }));
   } catch (e) {
     dirty = true;
@@ -1648,7 +1657,7 @@ window.addEventListener("beforeunload", () => {
     fetch("/api/scenes/" + encodeURIComponent(sceneMeta.id), {
       method: "PUT", keepalive: true,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data: sceneData })
+      body: JSON.stringify({ data: scenePayload() })
     }).catch(() => {});
   }
 });
@@ -2140,9 +2149,24 @@ async function switchScene(id) {
       grid.classList.remove("switching");
       showToast("已切换到「" + sceneMeta.name + "」", "info", 1800);
     }, 220);
+    loadRecentLogs(); // 从当日日志文件恢复最近 10 条时间线
   } catch (e) {
     showToast("场景切换失败：" + e.message, "error");
   }
+}
+
+/** 从当日日志文件加载当前场景 + 当前环境的最近 10 条记录 */
+async function loadRecentLogs() {
+  if (!sceneMeta || !sceneData) return;
+  const d = new Date();
+  const date = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  try {
+    const items = await API.getLogs(meta.currentSceneId, sceneData.currentEnvId, date);
+    sceneData.logs = Array.isArray(items) ? items.slice(-10) : [];
+  } catch (e) {
+    sceneData.logs = [];
+  }
+  renderLogsPanel();
 }
 
 async function createNewScene(copyId) {
@@ -2479,15 +2503,43 @@ function openActionMenu(x, y, actionId) {
 function markActionFeedback(actionId, status) {
   if (!actionId) return;
   actionFeedback.set(actionId, { status });
+  updateActionCardUi(actionId, { status });
   if (feedbackTimers.has(actionId)) clearTimeout(feedbackTimers.get(actionId));
   if (status !== "loading") {
     feedbackTimers.set(actionId, setTimeout(() => {
       actionFeedback.delete(actionId);
       feedbackTimers.delete(actionId);
-      renderActions();
+      updateActionCardUi(actionId, null);
     }, 2200));
   }
-  renderActions();
+}
+/** 局部更新单张接口卡片状态（避免频繁全量重建列表造成的内存波动） */
+function updateActionCardUi(actionId, fb) {
+  const card = document.querySelector('.action-card[data-action-id="' + actionId + '"]');
+  if (!card) return;
+  const status = fb ? fb.status : "";
+  card.className = "action-card" + (status ? " is-" + status : "");
+  const btn = card.querySelector("[data-run]");
+  if (btn) {
+    btn.classList.remove("is-loading", "is-success", "is-error");
+    if (status) btn.classList.add("is-" + status);
+    if (status === "loading") { btn.textContent = "发送中"; btn.disabled = true; }
+    else { btn.textContent = status === "success" ? "成功" : status === "error" ? "重试" : "发送"; btn.disabled = false; }
+  }
+  const chip = card.querySelector(".act-chip");
+  if (status) {
+    if (chip) {
+      chip.className = "chip act-chip " + (status === "loading" ? "chip-blue" : status === "success" ? "chip-green" : "chip-red");
+      chip.textContent = status === "loading" ? "发送中" : status === "success" ? "已成功" : "失败";
+    } else {
+      const span = document.createElement("span");
+      span.className = "chip act-chip " + (status === "loading" ? "chip-blue" : status === "success" ? "chip-green" : "chip-red");
+      span.textContent = status === "loading" ? "发送中" : status === "success" ? "已成功" : "失败";
+      card.querySelector(".action-side").appendChild(span);
+    }
+  } else if (chip) {
+    chip.remove();
+  }
 }
 
 /* ==================== 全局设置 Sheet ==================== */
@@ -2625,6 +2677,7 @@ function switchEnvironment(id) {
     refreshSettingsControls();
     renderSettingsEnvBar();
   }
+  loadRecentLogs();
   showToast("已切换到「" + target.name + "」", "info", 1600);
 }
 let envMenuEl = null;
@@ -3179,6 +3232,11 @@ function highlightJson(text) {
 function renderJsonText(el, text) {
   if (!el) return;
   const t = String(text ?? "");
+  // 超大内容直接原文展示：避免格式化 / 高亮 / 正则带来的内存与卡顿
+  if (t.length > 500000) {
+    el.textContent = t;
+    return;
+  }
   const isObj = (v) => v !== null && typeof v === "object";
   let parsed = safeJson(t);
   if (isObj(parsed)) {
@@ -3435,7 +3493,7 @@ async function executeRequest({ title, method, url, bodyText, paramType, from, a
       time: timeStr
     };
     sceneData.logs.push(logEntry);
-    sceneData.logs = sceneData.logs.slice(-30);
+    sceneData.logs = sceneData.logs.slice(-10); // 内存只保留最近 10 条，完整历史按天落盘
     expandedLogIndex = -1; // 新日志到来时保持收起，由用户点击展开
     // 完整历史落盘：data/logs/{场景ID}/{环境ID}/年-月/年-月-日.jsonl
     API.logAppend(meta.currentSceneId, sceneData.currentEnvId, logEntry);
@@ -4051,6 +4109,7 @@ async function copyText(text) {
     API.setCurrent(curId);
     renderAll();
     initUILayout();
+    loadRecentLogs();
   } catch (e) {
     $("sceneSubtitle").textContent = "无法连接本地服务：" + e.message;
     showToast("本地服务连接失败，请通过 start.bat 或 node server.js 启动", "error", 5000);

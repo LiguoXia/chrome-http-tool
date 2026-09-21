@@ -247,7 +247,8 @@ function mergeScene(data) {
       paramType: ["JSON", "FORM", "QUERY", "RAW"].includes(d.poll && d.poll.paramType) ? d.poll.paramType : "JSON"
     },
     settings: cur.settings,
-    logs: Array.isArray(d.logs) ? d.logs.slice(-30) : [],
+    // 日志历史不再随场景文件持久化（完整记录按天写入 data/logs），减小保存体积
+    logs: [],
     lastRequest: String(d.lastRequest ?? ""),
     lastResponse: String(d.lastResponse ?? ""),
     lastRequestName: String(d.lastRequestName ?? ""),
