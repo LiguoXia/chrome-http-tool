@@ -74,7 +74,7 @@ dotnet publish -c Release -o dist
 
 - 索引文件：`data/index.json`（场景元信息、分组、UI 布局偏好）
 - 场景数据：`data/scenes/{sceneId}.json`（每场景独立文件，可直接编辑或迁移）
-- 请求日志：`data/logs/年-月/年-月-日.jsonl`（JSON Lines，每行一条请求记录；每天一个文件、每月一个文件夹，方便归档与检索）
+- 请求日志：`data/logs/{场景ID}/{环境ID}/年-月/年-月-日.jsonl`（JSON Lines，每行一条请求记录；按场景、环境分别记录，每天一个文件、每月一个文件夹，方便归档与检索）
 
 ## 📖 使用说明
 

@@ -1579,10 +1579,10 @@ const API = {
       });
     } catch (e) { /* 布局偏好保存失败不阻断 */ }
   },
-  logAppend(sceneId, entry) {
+  logAppend(sceneId, envId, entry) {
     fetch("/api/logs", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sceneId, entry })
+      body: JSON.stringify({ sceneId, envId, entry })
     }).catch(() => { /* 日志落盘失败不阻断请求 */ });
   },
   async proxy(payload) {
@@ -3437,8 +3437,8 @@ async function executeRequest({ title, method, url, bodyText, paramType, from, a
     sceneData.logs.push(logEntry);
     sceneData.logs = sceneData.logs.slice(-30);
     expandedLogIndex = 0; // 新日志默认展开最新一条
-    // 完整历史落盘：data/logs/年-月/年-月-日.jsonl
-    API.logAppend(meta.currentSceneId, logEntry);
+    // 完整历史落盘：data/logs/{场景ID}/{环境ID}/年-月/年-月-日.jsonl
+    API.logAppend(meta.currentSceneId, sceneData.currentEnvId, logEntry);
   }
   if (from === "poll") {
     lastPollResult = { ...result, display: displayText };

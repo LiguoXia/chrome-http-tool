@@ -687,24 +687,28 @@ const server = http.createServer((req, res) => {
       return readBody(req, 2 * 1024 * 1024).then(b => {
         const body = parse(b);
         const sceneId = String(body.sceneId || "default").replace(/[^\w-]/g, "");
+        const envId = String(body.envId || "default").replace(/[^\w-]/g, "");
         const entry = body.entry && typeof body.entry === "object" ? body.entry : null;
         if (!entry) return json(res, 400, { error: "缺少日志内容" });
         const now = new Date();
         const y = now.getFullYear();
         const m = String(now.getMonth() + 1).padStart(2, "0");
         const day = String(now.getDate()).padStart(2, "0");
-        const dir = path.join(DATA_DIR, "logs", `${y}-${m}`);
+        const dir = path.join(DATA_DIR, "logs", sceneId, envId, `${y}-${m}`);
         fs.mkdirSync(dir, { recursive: true });
-        const line = JSON.stringify({ sceneId, ...entry });
+        const line = JSON.stringify({ sceneId, envId, ...entry });
         fs.appendFileSync(path.join(dir, `${y}-${m}-${day}.jsonl`), line + "\n", "utf8");
         return json(res, 200, { ok: true });
       });
     }
     if (p === "/api/logs" && req.method === "GET") {
+      const sceneId = String(u.searchParams.get("sceneId") || "").replace(/[^\w-]/g, "");
+      const envId = String(u.searchParams.get("envId") || "").replace(/[^\w-]/g, "");
       const date = u.searchParams.get("date") || "";
+      if (!sceneId || !envId) return json(res, 400, { error: "缺少 sceneId 或 envId" });
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return json(res, 400, { error: "日期格式应为 YYYY-MM-DD" });
       const [y, m, d] = date.split("-");
-      const fp = path.join(DATA_DIR, "logs", `${y}-${m}`, `${y}-${m}-${d}.jsonl`);
+      const fp = path.join(DATA_DIR, "logs", sceneId, envId, `${y}-${m}`, `${y}-${m}-${d}.jsonl`);
       if (!fs.existsSync(fp)) return json(res, 200, []);
       const items = fs.readFileSync(fp, "utf8").split("\n").filter(Boolean).map(line => {
         try { return JSON.parse(line); } catch (e) { return null; }

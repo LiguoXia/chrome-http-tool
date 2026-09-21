@@ -1039,6 +1039,7 @@ internal sealed class AppServer
                 var body = await new StreamReader(req.Body).ReadToEndAsync();
                 var payload = Parse(body);
                 string sceneId = System.Text.RegularExpressions.Regex.Replace(Str(payload["sceneId"]) != "" ? Str(payload["sceneId"]) : "default", @"[^\w\-]", "");
+                string envId = System.Text.RegularExpressions.Regex.Replace(Str(payload["envId"]) != "" ? Str(payload["envId"]) : "default", @"[^\w\-]", "");
                 var entry = payload["entry"] as JsonObject;
                 if (entry == null)
                 {
@@ -1047,10 +1048,11 @@ internal sealed class AppServer
                 }
                 var now = DateTime.Now;
                 string ym = now.ToString("yyyy-MM");
-                string dir = Path.Combine(_dataDir, "logs", ym);
+                string dir = Path.Combine(_dataDir, "logs", sceneId, envId, ym);
                 Directory.CreateDirectory(dir);
                 var line = (JsonObject)entry.DeepClone();
                 line["sceneId"] = sceneId;
+                line["envId"] = envId;
                 File.AppendAllText(
                     Path.Combine(dir, now.ToString("yyyy-MM-dd") + ".jsonl"),
                     line.ToJsonString(JsonOpts) + "\n", new UTF8Encoding(false));
@@ -1059,14 +1061,21 @@ internal sealed class AppServer
             }
             if (path == "/api/logs" && req.Method == "GET")
             {
+                string sceneId = System.Text.RegularExpressions.Regex.Replace(ctx.Request.Query["sceneId"].ToString(), @"[^\w\-]", "");
+                string envId = System.Text.RegularExpressions.Regex.Replace(ctx.Request.Query["envId"].ToString(), @"[^\w\-]", "");
                 string date = ctx.Request.Query["date"].ToString();
+                if (string.IsNullOrEmpty(sceneId) || string.IsNullOrEmpty(envId))
+                {
+                    await WriteJson(ctx, 400, new JsonObject { ["error"] = "缺少 sceneId 或 envId" });
+                    return;
+                }
                 if (!System.Text.RegularExpressions.Regex.IsMatch(date, @"^\d{4}-\d{2}-\d{2}$"))
                 {
                     await WriteJson(ctx, 400, new JsonObject { ["error"] = "日期格式应为 YYYY-MM-DD" });
                     return;
                 }
                 string ym = date.Substring(0, 7);
-                string fp = Path.Combine(_dataDir, "logs", ym, date + ".jsonl");
+                string fp = Path.Combine(_dataDir, "logs", sceneId, envId, ym, date + ".jsonl");
                 if (!File.Exists(fp))
                 {
                     await WriteJson(ctx, 200, new JsonArray());
