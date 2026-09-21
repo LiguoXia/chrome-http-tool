@@ -355,16 +355,49 @@ body.resizing iframe{pointer-events:none}
 }
 .copy-btn:hover{background:var(--fill-gray);color:var(--text)}
 .request-log{display:flex;flex-direction:column;gap:9px}
-.log-item{
-  border:1px solid var(--sep);background:var(--panel);
-  border-radius:var(--radius-md);padding:10px 13px;min-width:0;
+/* ---------- 请求日志：时间线 ---------- */
+.log-timeline{
+  position:relative;display:flex;flex-direction:column;gap:7px;
+  padding-left:16px;
 }
-.log-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}
+.log-timeline::before{
+  content:"";position:absolute;left:4px;top:8px;bottom:8px;
+  width:1.5px;background:var(--sep);
+}
+.log-row{position:relative;display:flex;gap:10px;min-width:0}
+.log-dot{
+  position:absolute;left:-14.5px;top:9px;
+  width:9px;height:9px;border-radius:50%;flex-shrink:0;
+  box-shadow:0 0 0 2.5px var(--panel);
+}
+.log-dot.ok{background:#34C759}
+.log-dot.fail{background:#FF3B30}
+.log-row-main{flex:1;min-width:0}
+.log-row-head{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:6px 10px;border-radius:var(--radius-md);
+  cursor:pointer;user-select:none;
+  transition:background .14s var(--ease);
+}
+.log-row-head:hover{background:var(--blue-soft)}
 .log-title{font-size:12.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.log-time{font-size:11px;color:var(--tertiary);margin-left:auto;flex-shrink:0}
-.log-lines{display:flex;flex-direction:column;gap:4px}
-.log-line{font-size:11.5px;line-height:1.55;word-break:break-all;white-space:pre-wrap;max-height:130px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.log-line .k{color:var(--tertiary)}
+.log-status{font-size:11px;font-weight:700;flex-shrink:0}
+.log-status.ok{color:#248A3D}
+.log-status.fail{color:#FF3B30}
+.log-meta{font-size:11px;color:var(--tertiary);flex-shrink:0}
+.log-toggle{font-size:10px;color:var(--tertiary);margin-left:auto;flex-shrink:0;width:16px;text-align:center}
+.log-detail{
+  margin:6px 0 2px;padding:0 10px;
+  display:flex;flex-direction:column;gap:7px;
+}
+.log-detail-req,.log-detail-resp{
+  font-size:11.5px;line-height:1.6;word-break:break-all;white-space:pre-wrap;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  border:1px solid var(--sep);border-radius:var(--radius-sm);
+  padding:8px 10px;background:var(--panel);min-width:0;
+}
+.log-detail-req{color:var(--secondary)}
+.log-detail-resp{color:var(--text)}
 
 /* ---------- 轮询面板 ---------- */
 .poll-scroll{flex:1;min-height:0;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:13px}
@@ -1546,6 +1579,12 @@ const API = {
       });
     } catch (e) { /* 布局偏好保存失败不阻断 */ }
   },
+  logAppend(sceneId, entry) {
+    fetch("/api/logs", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sceneId, entry })
+    }).catch(() => { /* 日志落盘失败不阻断请求 */ });
+  },
   async proxy(payload) {
     const r = await fetch("/api/proxy", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -2237,28 +2276,49 @@ function renderGlobalSummary() {
   });
 }
 
+let expandedLogIndex = 0;
 function renderLogs() {
   const box = $("requestLog");
   if (!sceneData.logs.length) {
     box.innerHTML = '<div class="empty"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg><div>暂无请求日志，点击接口卡片上的「发送」开始调试</div></div>';
     return;
   }
-  box.innerHTML = sceneData.logs.slice(-10).reverse().map(item => {
-    const st = item.status ? `<span class="chip ${statusChipClass(item.status)}">${item.status}</span>` : "";
-    const dur = item.duration != null ? `<span class="chip chip-gray">${item.duration} ms</span>` : "";
+  const items = sceneData.logs.slice(-10).reverse();
+  if (expandedLogIndex >= items.length) expandedLogIndex = 0;
+  box.innerHTML = '<div class="log-timeline">' + items.map((item, idx) => {
+    const ok = item.ok !== false;
+    const method = (item.request || "").split(" ")[0] || "API";
+    const expanded = idx === expandedLogIndex;
     return `
-      <div class="log-item">
-        <div class="log-head">
-          <span class="log-title">${esc(item.title || "接口调用")}</span>
-          ${st}${dur}
-          <span class="log-time">${esc(item.time || "")}</span>
-        </div>
-        <div class="log-lines">
-          <div class="log-line"><span class="k">请求</span> ${esc(item.request || "")}</div>
-          <div class="log-line"><span class="k">响应</span> ${esc(item.response || "")}</div>
+      <div class="log-row">
+        <span class="log-dot ${ok ? "ok" : "fail"}"></span>
+        <div class="log-row-main">
+          <div class="log-row-head" data-log-i="${idx}" role="button" tabindex="0">
+            <span class="m-badge m-${esc(method)}">${esc(method)}</span>
+            <span class="log-title">${esc(item.title || "接口调用")}</span>
+            <span class="log-status ${ok ? "ok" : "fail"}">${item.status || "ERR"}</span>
+            <span class="log-meta">${item.duration != null ? item.duration + " ms · " : ""}${esc(item.time || "")}</span>
+            <span class="log-toggle">${expanded ? "▾" : "▸"}</span>
+          </div>
+          ${expanded ? `
+          <div class="log-detail">
+            <div class="log-detail-req" id="logDetailReq${idx}"></div>
+            <div class="log-detail-resp" id="logDetailResp${idx}"></div>
+          </div>` : ""}
         </div>
       </div>`;
-  }).join("");
+  }).join("") + '</div>';
+  if (expandedLogIndex >= 0 && items[expandedLogIndex]) {
+    renderJsonText($("logDetailReq" + expandedLogIndex), items[expandedLogIndex].request || "");
+    renderJsonText($("logDetailResp" + expandedLogIndex), items[expandedLogIndex].response || "");
+  }
+  box.querySelectorAll(".log-row-head").forEach(h => {
+    h.addEventListener("click", () => {
+      const i = Number(h.getAttribute("data-log-i"));
+      expandedLogIndex = expandedLogIndex === i ? -1 : i;
+      renderLogs();
+    });
+  });
 }
 
 /* ==================== 渲染：接口列表 ==================== */
@@ -3365,7 +3425,7 @@ async function executeRequest({ title, method, url, bodyText, paramType, from, a
     sceneData.lastResponse = displayText;
     sceneData.lastResponseName = title;
     sceneData.lastResponseTime = timeStr;
-    sceneData.logs.push({
+    const logEntry = {
       title,
       request: built.requestDesc,
       response: displayText.slice(0, 900),
@@ -3373,8 +3433,12 @@ async function executeRequest({ title, method, url, bodyText, paramType, from, a
       duration: result.duration,
       ok: result.ok,
       time: timeStr
-    });
+    };
+    sceneData.logs.push(logEntry);
     sceneData.logs = sceneData.logs.slice(-30);
+    expandedLogIndex = 0; // 新日志默认展开最新一条
+    // 完整历史落盘：data/logs/年-月/年-月-日.jsonl
+    API.logAppend(meta.currentSceneId, logEntry);
   }
   if (from === "poll") {
     lastPollResult = { ...result, display: displayText };

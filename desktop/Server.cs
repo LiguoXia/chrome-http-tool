@@ -1034,6 +1034,54 @@ internal sealed class AppServer
                 await WriteJson(ctx, 200, await DoProxy(Parse(body)));
                 return;
             }
+            if (path == "/api/logs" && req.Method == "POST")
+            {
+                var body = await new StreamReader(req.Body).ReadToEndAsync();
+                var payload = Parse(body);
+                string sceneId = System.Text.RegularExpressions.Regex.Replace(Str(payload["sceneId"]) != "" ? Str(payload["sceneId"]) : "default", @"[^\w\-]", "");
+                var entry = payload["entry"] as JsonObject;
+                if (entry == null)
+                {
+                    await WriteJson(ctx, 400, new JsonObject { ["error"] = "缺少日志内容" });
+                    return;
+                }
+                var now = DateTime.Now;
+                string ym = now.ToString("yyyy-MM");
+                string dir = Path.Combine(_dataDir, "logs", ym);
+                Directory.CreateDirectory(dir);
+                var line = (JsonObject)entry.DeepClone();
+                line["sceneId"] = sceneId;
+                File.AppendAllText(
+                    Path.Combine(dir, now.ToString("yyyy-MM-dd") + ".jsonl"),
+                    line.ToJsonString(JsonOpts) + "\n", new UTF8Encoding(false));
+                await WriteJson(ctx, 200, new JsonObject { ["ok"] = true });
+                return;
+            }
+            if (path == "/api/logs" && req.Method == "GET")
+            {
+                string date = ctx.Request.Query["date"].ToString();
+                if (!System.Text.RegularExpressions.Regex.IsMatch(date, @"^\d{4}-\d{2}-\d{2}$"))
+                {
+                    await WriteJson(ctx, 400, new JsonObject { ["error"] = "日期格式应为 YYYY-MM-DD" });
+                    return;
+                }
+                string ym = date.Substring(0, 7);
+                string fp = Path.Combine(_dataDir, "logs", ym, date + ".jsonl");
+                if (!File.Exists(fp))
+                {
+                    await WriteJson(ctx, 200, new JsonArray());
+                    return;
+                }
+                var items = new JsonArray();
+                foreach (var lineRaw in File.ReadAllLines(fp, Encoding.UTF8))
+                {
+                    var t = lineRaw.Trim();
+                    if (t.Length == 0) continue;
+                    try { items.Add(JsonNode.Parse(t)); } catch { /* 跳过坏行 */ }
+                }
+                await WriteJson(ctx, 200, items);
+                return;
+            }
             await WriteJson(ctx, 404, new JsonObject { ["error"] = "Not Found" });
         }
         catch (Exception e)
