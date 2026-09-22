@@ -4167,8 +4167,9 @@ function bindEvents() {
     showToast("轮询配置已更新：" + parsed.method + " " + parsed.url, "success", 3000);
   });
 
-  // 轮询：复制为 cmd / bash curl
+  // 轮询：复制为 cmd / bash curl（阻止冒泡，避免 document 级关闭监听把菜单即开即关）
   $("pollCopyCurlBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
     openCurlMenu(rect.left, rect.bottom + 6, null);
   });
