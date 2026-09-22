@@ -1068,6 +1068,8 @@ body.action-dragging{cursor:grabbing}
               <option value="20">20 条</option>
               <option value="30">30 条</option>
               <option value="50">50 条</option>
+              <option value="100">100 条</option>
+              <option value="all">显示所有</option>
             </select>
             <button class="btn btn-ghost btn-sm" id="clearLogsBtn" title="清理当前场景、当前环境、今日的日志数据">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
@@ -1165,6 +1167,10 @@ body.action-dragging{cursor:grabbing}
             <button class="btn btn-ghost" id="pollImportCurlBtn" title="粘贴 curl 命令，导入后直接更新轮询配置">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
               从 curl 导入
+            </button>
+            <button class="btn btn-ghost" id="pollCopyCurlBtn" title="复制为 cmd / bash curl 命令">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              复制 curl
             </button>
           </div>
           <div class="divider"></div>
@@ -2360,10 +2366,12 @@ function renderGlobalSummary() {
   });
 }
 
-/** 历史日志显示条数（UI 偏好，默认 10） */
+/** 历史日志显示条数（UI 偏好，默认 10；"all" = 显示全部可用记录，上限 200） */
 function maxLogCount() {
-  const v = parseInt(meta.ui?.logShowCount || "10", 10);
-  return Number.isFinite(v) && v > 0 ? v : 10;
+  const v = meta.ui?.logShowCount || "10";
+  if (v === "all") return 200;
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 200) : 10;
 }
 function todayStr() {
   const d = new Date();
@@ -3104,17 +3112,11 @@ function escapeCmdArg(s) {
 function escapeBashArg(s) {
   return String(s).replace(/'/g, "'\\''");
 }
-function generateCurl(actionId, format) {
-  const action = sceneData.actions.find(a => a.id === actionId);
-  if (!action) return "";
-  const built = buildRequest({ method: action.method, url: action.url, bodyText: action.params, paramType: action.paramType });
-  const parts = [];
-  if (built.method !== "GET") parts.push(["-X", built.method]);
-  Object.entries(built.headers).forEach(([k, v]) => parts.push(["-H", k + ": " + v]));
+function curlString(built, format) {
   const withBody = built.method !== "GET" && built.body !== undefined && built.body !== null && String(built.body) !== "";
   if (format === "bash") {
-    const lines = ["curl"];
     const esc = escapeBashArg;
+    const lines = ["curl"];
     if (built.method !== "GET") lines.push("  -X '" + esc(built.method) + "'");
     lines.push("  '" + esc(built.finalUrl) + "'");
     Object.entries(built.headers).forEach(([k, v]) => lines.push("  -H '" + esc(k + ": " + v) + "'"));
@@ -3128,6 +3130,22 @@ function generateCurl(actionId, format) {
   Object.entries(built.headers).forEach(([k, v]) => segs.push('-H "' + esc(k + ": " + v) + '"'));
   if (withBody) segs.push('-d "' + esc(String(built.body)) + '"');
   return segs.join(" ");
+}
+function generateCurl(actionId, format) {
+  const action = sceneData.actions.find(a => a.id === actionId);
+  if (!action) return "";
+  const built = buildRequest({ method: action.method, url: action.url, bodyText: action.params, paramType: action.paramType });
+  return curlString(built, format);
+}
+function generatePollCurl(format) {
+  readPollFields();
+  const built = buildRequest({
+    method: sceneData.poll.method,
+    url: sceneData.poll.url,
+    bodyText: sceneData.poll.body,
+    paramType: sceneData.poll.paramType || "JSON"
+  });
+  return curlString(built, format);
 }
 
 /* ==================== 右键菜单（复制 curl） ==================== */
@@ -3158,7 +3176,8 @@ function openCurlMenu(x, y, actionId) {
   el.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-format]");
     if (btn) {
-      copyText(generateCurl(actionId, btn.getAttribute("data-format")));
+      const format = btn.getAttribute("data-format");
+      copyText(actionId ? generateCurl(actionId, format) : generatePollCurl(format));
     }
     closeCurlMenu();
   });
@@ -3562,7 +3581,7 @@ async function executeRequest({ title, method, url, bodyText, paramType, from, a
       time: timeStr
     };
     sceneData.logs.push(logEntry);
-    sceneData.logs = sceneData.logs.slice(-10); // 内存只保留最近 10 条，完整历史按天落盘
+    sceneData.logs = sceneData.logs.slice(-200); // 内存上限 200 条（显示所有），完整历史按天落盘
     expandedLogIndex = -1; // 新日志到来时保持收起，由用户点击展开
     // 完整历史落盘：data/logs/{场景ID}/{环境ID}/年-月/年-月-日.jsonl
     API.logAppend(meta.currentSceneId, sceneData.currentEnvId, logEntry);
@@ -4146,6 +4165,12 @@ function bindEvents() {
     renderPollFields();
     queueSave();
     showToast("轮询配置已更新：" + parsed.method + " " + parsed.url, "success", 3000);
+  });
+
+  // 轮询：复制为 cmd / bash curl
+  $("pollCopyCurlBtn").addEventListener("click", (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    openCurlMenu(rect.left, rect.bottom + 6, null);
   });
 
   // 日志：显示条数设置 + 清理当日日志
