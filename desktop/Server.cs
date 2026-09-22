@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace HttpTool;
 
@@ -75,13 +76,13 @@ internal sealed class AppServer
             .Build();
         _host.Start();
         // 轻量周期回收：低频触发代际 GC，保持长期运行内存水位稳定
-        _gcTimer = new Timer(_ =>
+        _gcTimer = new System.Threading.Timer(_ =>
         {
             try { GC.Collect(1, GCCollectionMode.Optimized, false); } catch { /* 忽略 */ }
         }, null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2));
     }
 
-    private Timer _gcTimer;
+    private System.Threading.Timer _gcTimer;
 
     public void Stop()
     {
