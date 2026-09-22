@@ -702,6 +702,21 @@ const server = http.createServer((req, res) => {
         return json(res, 200, { ok: true });
       });
     }
+    if (p === "/api/logs" && req.method === "DELETE") {
+      const sceneId = String(u.searchParams.get("sceneId") || "").replace(/[^\w-]/g, "");
+      const envId = String(u.searchParams.get("envId") || "").replace(/[^\w-]/g, "");
+      const date = u.searchParams.get("date") || "";
+      if (!sceneId || !envId) return json(res, 400, { error: "缺少 sceneId 或 envId" });
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return json(res, 400, { error: "日期格式应为 YYYY-MM-DD" });
+      const [y, m, d] = date.split("-");
+      const fp = path.join(DATA_DIR, "logs", sceneId, envId, `${y}-${m}`, `${y}-${m}-${d}.jsonl`);
+      let removed = false;
+      if (fs.existsSync(fp)) {
+        fs.unlinkSync(fp);
+        removed = true;
+      }
+      return json(res, 200, { ok: true, removed });
+    }
     if (p === "/api/logs" && req.method === "GET") {
       const sceneId = String(u.searchParams.get("sceneId") || "").replace(/[^\w-]/g, "");
       const envId = String(u.searchParams.get("envId") || "").replace(/[^\w-]/g, "");

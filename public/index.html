@@ -360,6 +360,22 @@ body.resizing iframe{pointer-events:none}
 }
 .copy-btn:hover{background:var(--fill-gray);color:var(--text)}
 .request-log{display:flex;flex-direction:column;gap:9px}
+.log-head-tools{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.log-head-tools select{
+  height:28px;padding:0 8px;border-radius:8px;font-size:12px;
+  border:1px solid var(--sep);background:var(--panel);color:var(--text);
+  cursor:pointer;outline:none;
+}
+.log-head-tools select:focus{border-color:var(--blue)}
+.btn-sm{height:28px;padding:0 11px;font-size:12px;border-radius:8px}
+.dialog-textarea{
+  width:100%;resize:vertical;min-height:90px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12px;line-height:1.6;
+  border:1px solid var(--sep);border-radius:var(--radius-sm);
+  padding:9px 11px;background:var(--fill-gray);color:var(--text);outline:none;
+}
+.dialog-textarea:focus{border-color:var(--blue)}
 /* ---------- 请求日志：时间线 ---------- */
 .log-timeline{
   position:relative;display:flex;flex-direction:column;gap:7px;
@@ -1045,6 +1061,19 @@ body.action-dragging{cursor:grabbing}
             <h2>请求 / 响应日志</h2>
             <small>最近一次触发结果与历史记录，便于演示时确认回执。</small>
           </div>
+          <div class="log-head-tools">
+            <select id="logShowCount" title="历史记录显示条数">
+              <option value="5">5 条</option>
+              <option value="10">10 条</option>
+              <option value="20">20 条</option>
+              <option value="30">30 条</option>
+              <option value="50">50 条</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" id="clearLogsBtn" title="清理当前场景、当前环境、今日的日志数据">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+              <span>清理</span>
+            </button>
+          </div>
         </div>
         <div class="panel-scroll">
           <div class="latest-grid">
@@ -1133,6 +1162,10 @@ body.action-dragging{cursor:grabbing}
             <button class="btn btn-primary" id="startPollBtn">启动轮询</button>
             <button class="btn btn-danger-soft" id="stopPollBtn">停止轮询</button>
             <button class="btn btn-ghost" id="pollOnceBtn">立即查询</button>
+            <button class="btn btn-ghost" id="pollImportCurlBtn" title="粘贴 curl 命令，导入后直接更新轮询配置">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+              从 curl 导入
+            </button>
           </div>
           <div class="divider"></div>
           <div class="field">
@@ -1362,6 +1395,7 @@ body.action-dragging{cursor:grabbing}
     <div class="dialog-title" id="dialogTitle"></div>
     <div class="dialog-msg hidden" id="dialogMsg"></div>
     <input class="dialog-input hidden" id="dialogInput" />
+    <textarea class="dialog-input dialog-textarea hidden" id="dialogTextarea" rows="5"></textarea>
     <div class="dialog-actions">
       <button class="btn btn-ghost" id="dialogCancel">取消</button>
       <button class="btn btn-primary" id="dialogConfirm">确定</button>
@@ -1607,6 +1641,12 @@ const API = {
       "&envId=" + encodeURIComponent(envId) + "&date=" + encodeURIComponent(date));
     return r.json();
   },
+  async deleteLogs(sceneId, envId, date) {
+    const r = await fetch("/api/logs?sceneId=" + encodeURIComponent(sceneId) +
+      "&envId=" + encodeURIComponent(envId) + "&date=" + encodeURIComponent(date),
+      { method: "DELETE" });
+    return r.json();
+  },
   async proxy(payload) {
     const r = await fetch("/api/proxy", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -1739,20 +1779,24 @@ function initTooltip() {
 
 /* ==================== 通用对话框 ==================== */
 let dialogResolve = null;
-function showDialog({ title, message = "", input = false, placeholder = "", value = "", confirmText = "确定", cancelText = "取消", danger = false }) {
+function showDialog({ title, message = "", input = false, placeholder = "", value = "", confirmText = "确定", cancelText = "取消", danger = false, textarea = false }) {
   return new Promise((resolve) => {
     dialogResolve = resolve;
     $("dialogTitle").textContent = title;
     $("dialogMsg").textContent = message;
     $("dialogMsg").classList.toggle("hidden", !message);
-    $("dialogInput").classList.toggle("hidden", !input);
+    $("dialogInput").classList.toggle("hidden", !input || textarea);
     $("dialogInput").value = value;
     $("dialogInput").placeholder = placeholder;
+    $("dialogTextarea").classList.toggle("hidden", !textarea);
+    $("dialogTextarea").value = value;
+    $("dialogTextarea").placeholder = placeholder;
     $("dialogConfirm").textContent = confirmText;
     $("dialogCancel").textContent = cancelText;
     $("dialogConfirm").className = "btn " + (danger ? "btn-danger-soft" : "btn-primary");
     $("dialogMask").classList.add("show");
-    if (input) setTimeout(() => { $("dialogInput").focus(); $("dialogInput").select(); }, 60);
+    if (textarea) setTimeout(() => $("dialogTextarea").focus(), 60);
+    else if (input) setTimeout(() => { $("dialogInput").focus(); $("dialogInput").select(); }, 60);
     else setTimeout(() => $("dialogConfirm").focus(), 60);
   });
 }
@@ -1762,7 +1806,8 @@ function closeDialog(result) {
 }
 $("dialogConfirm").addEventListener("click", () => {
   const hasInput = !$("dialogInput").classList.contains("hidden");
-  closeDialog(hasInput ? $("dialogInput").value.trim() : true);
+  const hasTextarea = !$("dialogTextarea").classList.contains("hidden");
+  closeDialog(hasInput ? $("dialogInput").value.trim() : hasTextarea ? $("dialogTextarea").value.trim() : true);
 });
 $("dialogCancel").addEventListener("click", () => closeDialog(null));
 $("dialogMask").addEventListener("click", (e) => { if (e.target === $("dialogMask")) closeDialog(null); });
@@ -2172,14 +2217,12 @@ async function switchScene(id) {
   }
 }
 
-/** 从当日日志文件加载当前场景 + 当前环境的最近 10 条记录 */
+/** 从当日日志文件加载当前场景 + 当前环境的最近 N 条记录 */
 async function loadRecentLogs() {
   if (!sceneMeta || !sceneData) return;
-  const d = new Date();
-  const date = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   try {
-    const items = await API.getLogs(meta.currentSceneId, sceneData.currentEnvId, date);
-    sceneData.logs = Array.isArray(items) ? items.slice(-10) : [];
+    const items = await API.getLogs(meta.currentSceneId, sceneData.currentEnvId, todayStr());
+    sceneData.logs = Array.isArray(items) ? items.slice(-maxLogCount()) : [];
   } catch (e) {
     sceneData.logs = [];
   }
@@ -2317,6 +2360,15 @@ function renderGlobalSummary() {
   });
 }
 
+/** 历史日志显示条数（UI 偏好，默认 10） */
+function maxLogCount() {
+  const v = parseInt(meta.ui?.logShowCount || "10", 10);
+  return Number.isFinite(v) && v > 0 ? v : 10;
+}
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
 let expandedLogIndex = -1; // 历史时间线默认全部收起（最新内容已在「最后请求/响应」卡片展示，不重复）
 function renderLogs() {
   const box = $("requestLog");
@@ -2324,7 +2376,7 @@ function renderLogs() {
     box.innerHTML = '<div class="empty"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg><div>暂无请求日志，点击接口卡片上的「发送」开始调试</div></div>';
     return;
   }
-  const items = sceneData.logs.slice(-10).reverse();
+  const items = sceneData.logs.slice(-maxLogCount()).reverse();
   if (expandedLogIndex >= items.length) expandedLogIndex = 0;
   box.innerHTML = '<div class="log-timeline">' + items.map((item, idx) => {
     const ok = item.ok !== false;
@@ -3736,6 +3788,10 @@ function initUILayout() {
     $("appRoot").style.setProperty("--sidebar-w", ui.sidebarWidth + "px");
   }
   setPollCollapsed(!!ui.collapsedPoll, true);
+  const logCountSel = $("logShowCount");
+  if (logCountSel) {
+    logCountSel.value = String(maxLogCount());
+  }
 }
 function initResizeHandles() {
   [["resizeHandle1", "action"], ["resizeHandle2", "poll"]].forEach(([id, side]) => {
@@ -4059,6 +4115,64 @@ function bindEvents() {
       readPollFields();
       queueSave();
     }, 300));
+  });
+
+  // 轮询：从 curl 导入，解析后直接覆盖当前轮询配置
+  $("pollImportCurlBtn").addEventListener("click", async () => {
+    const cmdText = await showDialog({
+      title: "从 curl 导入轮询接口",
+      message: "粘贴 curl 命令，解析后直接更新当前轮询配置（原配置将被覆盖）。",
+      textarea: true,
+      placeholder: 'curl -X POST "https://api.example.com/v1/status" -H "Content-Type: application/json" -d \'{"orderId":"{{orderId}}"}\'',
+      confirmText: "解析并更新"
+    });
+    if (!cmdText) return;
+    let parsed;
+    try {
+      parsed = parseCurlCommand(cmdText);
+    } catch (e) {
+      showToast("解析失败：" + e.message, "error");
+      return;
+    }
+    mergeCurlHeaders(parsed.headers);
+    sceneData.poll.url = parsed.url;
+    sceneData.poll.method = parsed.method;
+    sceneData.poll.paramType = parsed.paramType;
+    sceneData.poll.body = parsed.bodyText;
+    if (parsed.method === "GET") {
+      const q = new URL(parsed.url).searchParams;
+      if (!sceneData.poll.paramType) sceneData.poll.paramType = q.toString() ? "QUERY" : "JSON";
+    }
+    renderPollFields();
+    queueSave();
+    showToast("轮询配置已更新：" + parsed.method + " " + parsed.url, "success", 3000);
+  });
+
+  // 日志：显示条数设置 + 清理当日日志
+  $("logShowCount").addEventListener("change", () => {
+    meta.ui = meta.ui || {};
+    meta.ui.logShowCount = $("logShowCount").value;
+    API.saveUI(meta.ui);
+    renderLogs();
+  });
+  $("clearLogsBtn").addEventListener("click", async () => {
+    const ok = await showDialog({
+      title: "清理今日日志",
+      message: "将删除当前场景、当前环境下今天（" + todayStr() + "）的全部请求日志文件，且不可恢复。确定清理吗？",
+      confirmText: "清理",
+      cancelText: "取消",
+      danger: true
+    });
+    if (!ok) return;
+    try {
+      await API.deleteLogs(meta.currentSceneId, sceneData.currentEnvId, todayStr());
+      sceneData.logs = [];
+      expandedLogIndex = -1;
+      renderLogsPanel();
+      showToast("今日日志已清理");
+    } catch (e) {
+      showToast("清理失败：" + e.message, "error");
+    }
   });
 
   $("helpActionBtn").addEventListener("click", openHelpSheet);
