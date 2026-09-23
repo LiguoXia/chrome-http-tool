@@ -383,6 +383,11 @@ body.resizing iframe{pointer-events:none}
   animation:spin .7s linear infinite;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
+.loading-dot{
+  display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:var(--blue);margin-left:2px;vertical-align:middle;
+  animation:pulse 1s ease-in-out infinite;
+}
 /* ---------- 请求日志：时间线 ---------- */
 .log-timeline{
   position:relative;display:flex;flex-direction:column;gap:7px;
@@ -3562,7 +3567,10 @@ async function executeRequest({ title, method, url, bodyText, paramType, from, a
     sceneData.lastRequest = built.requestDesc;
     sceneData.lastRequestName = title;
     sceneData.lastRequestTime = timeStr;
-    lastRespLoading = true; // 响应未返回时，最后响应区显示加载动画
+    // 立即显示接口名，响应时间待返回（加载动画），避免残留上一条信息
+    sceneData.lastResponseName = title;
+    sceneData.lastResponseTime = "";
+    lastRespLoading = true;
   }
   if (triggerButton) setButtonBusy(triggerButton, "发送中…");
   // 轮询为独立通道，不触碰日志面板（避免每 3 秒全量重渲染）
@@ -3613,7 +3621,7 @@ async function executeRequest({ title, method, url, bodyText, paramType, from, a
     lastRespLoading = false;
     sceneData.lastResponse = displayText;
     sceneData.lastResponseName = title;
-    sceneData.lastResponseTime = timeStr;
+    sceneData.lastResponseTime = new Date().toLocaleString("zh-CN", { hour12: false }); // 响应返回时间
     const logEntry = {
       title,
       request: built.requestDesc,
@@ -3651,8 +3659,12 @@ function renderLogsPanel() {
   const respLabel = $("lastResponseLabel");
   reqLabel.textContent = sceneData.lastRequestName && sceneData.lastRequestTime
     ? `最后请求 · ${sceneData.lastRequestName} · ${sceneData.lastRequestTime}` : "最后请求";
-  respLabel.textContent = sceneData.lastResponseName && sceneData.lastResponseTime
-    ? `最后响应 · ${sceneData.lastResponseName} · ${sceneData.lastResponseTime}` : "最后响应";
+  if (lastRespLoading) {
+    respLabel.innerHTML = `最后响应 · ${esc(sceneData.lastResponseName || "请求中")} <span class="loading-dot"></span>`;
+  } else {
+    respLabel.textContent = sceneData.lastResponseName && sceneData.lastResponseTime
+      ? `最后响应 · ${sceneData.lastResponseName} · ${sceneData.lastResponseTime}` : "最后响应";
+  }
   renderJsonText($("lastRequestSummary"), sceneData.lastRequest || "暂无");
   if (lastRespLoading) {
     $("lastResponseSummary").innerHTML = '<div class="loading-inline"><span class="spinner"></span><span>请求中…</span></div>';
