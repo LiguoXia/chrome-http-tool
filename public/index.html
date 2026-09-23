@@ -2235,12 +2235,12 @@ async function switchScene(id) {
   }
 }
 
-/** 从当日日志文件加载当前场景 + 当前环境的最近 N 条记录 */
+/** 从当日日志文件加载当前场景 + 当前环境的记录（全量，受内存上限 200 保护；显示条数由 renderLogs 控制） */
 async function loadRecentLogs() {
   if (!sceneMeta || !sceneData) return;
   try {
     const items = await API.getLogs(meta.currentSceneId, sceneData.currentEnvId, todayStr());
-    sceneData.logs = Array.isArray(items) ? items.slice(-maxLogCount()) : [];
+    sceneData.logs = Array.isArray(items) ? items.slice(-200) : [];
   } catch (e) {
     sceneData.logs = [];
   }
@@ -2378,7 +2378,7 @@ function renderGlobalSummary() {
   });
 }
 
-/** 历史日志显示条数（UI 偏好，默认 10；"all" = 显示全部可用记录，上限 200） */
+/** 历史日志显示条数（UI 偏好，默认 10；"all" = 显示全部可用记录） */
 function maxLogCount() {
   const v = meta.ui?.logShowCount || "10";
   if (v === "all") return 200;
