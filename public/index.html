@@ -376,6 +376,13 @@ body.resizing iframe{pointer-events:none}
   padding:9px 11px;background:var(--fill-gray);color:var(--text);outline:none;
 }
 .dialog-textarea:focus{border-color:var(--blue)}
+.loading-inline{display:flex;align-items:center;gap:9px;color:var(--secondary);font-size:12px;padding:4px 0}
+.spinner{
+  width:15px;height:15px;border-radius:50%;flex-shrink:0;
+  border:2px solid var(--sep-strong);border-top-color:var(--blue);
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
 /* ---------- 请求日志：时间线 ---------- */
 .log-timeline{
   position:relative;display:flex;flex-direction:column;gap:7px;
@@ -2378,6 +2385,7 @@ function todayStr() {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 let expandedLogIndex = -1; // 历史时间线默认全部收起（最新内容已在「最后请求/响应」卡片展示，不重复）
+let lastRespLoading = false; // 请求进行中：最后响应区域显示加载动画
 function renderLogs() {
   const box = $("requestLog");
   if (!sceneData.logs.length) {
@@ -2621,9 +2629,10 @@ function updateActionCardUi(actionId, fb) {
 
 /* ==================== 全局设置 Sheet ==================== */
 function refreshSettingsControls() {
-  $("settingsDefaultProxy").checked = !!sceneData.settings.defaultUseProxy;
-  $("settingsTimeout").value = sceneData.settings.timeoutMs || 30000;
-  $("settingsInsecure").checked = !!sceneData.settings.insecure;
+  const t = editTarget();
+  $("settingsDefaultProxy").checked = !!t.settings.defaultUseProxy;
+  $("settingsTimeout").value = t.settings.timeoutMs || 30000;
+  $("settingsInsecure").checked = !!t.settings.insecure;
 }
 function renderSettingsEnvBar() {
   const bar = $("settingsEnvBar");
@@ -2631,16 +2640,43 @@ function renderSettingsEnvBar() {
   bar.innerHTML = "";
   sceneData.environments.forEach(e => {
     const pill = document.createElement("button");
-    pill.className = "env-pill" + (e.id === sceneData.currentEnvId ? " active" : "");
+    pill.className = "env-pill" + (e.id === editEnvId() ? " active" : "");
+    pill.title = "编辑该环境的配置（不切换外部实际生效环境）";
     pill.innerHTML = `<span class="env-dot" style="background:${esc(e.color)}"></span>${esc(e.name)}`;
     pill.addEventListener("click", () => {
-      if (e.id !== sceneData.currentEnvId) switchEnvironment(e.id);
+      if (e.id !== editEnvId()) {
+        editingEnvId = e.id;
+        renderSettingsEnvBar();
+        renderSettingsLists();
+        refreshSettingsControls();
+      }
     });
     bar.appendChild(pill);
   });
 }
+/** 设置弹层正在编辑的环境 id（默认跟随当前环境；切换仅作用于弹层内编辑目标） */
+let editingEnvId = null;
+function editEnvId() {
+  return editingEnvId || sceneData.currentEnvId;
+}
+/** 设置弹层的编辑目标：当前环境直接操作 sceneData，其他环境操作其 envConfigs 快照 */
+function editTarget() {
+  const id = editEnvId();
+  if (id !== sceneData.currentEnvId) {
+    if (!sceneData.envConfigs[id]) {
+      sceneData.envConfigs[id] = { headers: [], globals: {}, settings: { defaultUseProxy: true, timeoutMs: 30000, insecure: false } };
+    }
+    const cfg = sceneData.envConfigs[id];
+    cfg.headers = cfg.headers || [];
+    cfg.globals = cfg.globals || {};
+    cfg.settings = cfg.settings || { defaultUseProxy: true, timeoutMs: 30000, insecure: false };
+    return cfg;
+  }
+  return sceneData;
+}
 function openSettingsSheet() {
   settingsOpen = true;
+  editingEnvId = null; // 打开时回到当前环境
   renderSettingsEnvBar();
   renderSettingsLists();
   refreshSettingsControls();
@@ -2648,6 +2684,7 @@ function openSettingsSheet() {
 }
 function closeSettingsSheet() {
   settingsOpen = false;
+  editingEnvId = null;
   $("settingsSheet").classList.remove("show");
   renderGlobalSummary();
 }
@@ -2656,14 +2693,15 @@ function renderSettingsLists() {
   const globals = $("globalsList");
   headers.innerHTML = "";
   globals.innerHTML = "";
-  sceneData.headers.forEach((item, idx) => {
+  const t = editTarget();
+  t.headers.forEach((item, idx) => {
     headers.appendChild(makeKvRow(item.key, item.value, "header", idx));
   });
-  Object.entries(sceneData.globals).forEach(([key, value]) => {
+  Object.entries(t.globals).forEach(([key, value]) => {
     globals.appendChild(makeKvRow(key, value, "global", key));
   });
-  if (!sceneData.headers.length) headers.innerHTML = '<div class="hint" style="padding:6px 2px">暂无请求头</div>';
-  if (!Object.keys(sceneData.globals).length) globals.innerHTML = '<div class="hint" style="padding:6px 2px">暂无全局参数</div>';
+  if (!t.headers.length) headers.innerHTML = '<div class="hint" style="padding:6px 2px">暂无请求头</div>';
+  if (!Object.keys(t.globals).length) globals.innerHTML = '<div class="hint" style="padding:6px 2px">暂无全局参数</div>';
 }
 function makeKvRow(key, value, type, ref) {
   const row = document.createElement("div");
@@ -2680,16 +2718,17 @@ function makeKvRow(key, value, type, ref) {
   const valInput = row.querySelector("#" + valId);
   const removeBtn = row.querySelector(".remove");
   const onChange = debounce(() => {
+    const t = editTarget();
     if (type === "header") {
-      const idx = sceneData.headers.findIndex((x, i) => i === ref);
+      const idx = t.headers.findIndex((x, i) => i === ref);
       if (idx >= 0) {
-        sceneData.headers[idx] = { key: keyInput.value, value: valInput.value };
+        t.headers[idx] = { key: keyInput.value, value: valInput.value };
       }
     } else {
-      if (ref !== keyInput.value && Object.prototype.hasOwnProperty.call(sceneData.globals, ref)) {
-        delete sceneData.globals[ref];
+      if (ref !== keyInput.value && Object.prototype.hasOwnProperty.call(t.globals, ref)) {
+        delete t.globals[ref];
       }
-      if (keyInput.value.trim()) sceneData.globals[keyInput.value] = valInput.value;
+      if (keyInput.value.trim()) t.globals[keyInput.value] = valInput.value;
     }
     queueSave();
     renderGlobalSummary();
@@ -2697,10 +2736,11 @@ function makeKvRow(key, value, type, ref) {
   keyInput.addEventListener("input", onChange);
   valInput.addEventListener("input", onChange);
   removeBtn.addEventListener("click", () => {
+    const t = editTarget();
     if (type === "header") {
-      sceneData.headers = sceneData.headers.filter((x, i) => i !== ref);
+      t.headers = t.headers.filter((x, i) => i !== ref);
     } else {
-      delete sceneData.globals[ref];
+      delete t.globals[ref];
     }
     queueSave();
     renderSettingsLists();
@@ -2709,9 +2749,10 @@ function makeKvRow(key, value, type, ref) {
   return row;
 }
 function saveSettingsChanges() {
-  sceneData.settings.defaultUseProxy = $("settingsDefaultProxy").checked;
-  sceneData.settings.timeoutMs = Math.max(1000, parseInt($("settingsTimeout").value || "30000", 10));
-  sceneData.settings.insecure = $("settingsInsecure").checked;
+  const t = editTarget();
+  t.settings.defaultUseProxy = $("settingsDefaultProxy").checked;
+  t.settings.timeoutMs = Math.max(1000, parseInt($("settingsTimeout").value || "30000", 10));
+  t.settings.insecure = $("settingsInsecure").checked;
   queueSave();
   closeSettingsSheet();
   showToast("全局设置已保存");
@@ -3521,6 +3562,7 @@ async function executeRequest({ title, method, url, bodyText, paramType, from, a
     sceneData.lastRequest = built.requestDesc;
     sceneData.lastRequestName = title;
     sceneData.lastRequestTime = timeStr;
+    lastRespLoading = true; // 响应未返回时，最后响应区显示加载动画
   }
   if (triggerButton) setButtonBusy(triggerButton, "发送中…");
   // 轮询为独立通道，不触碰日志面板（避免每 3 秒全量重渲染）
@@ -3568,6 +3610,7 @@ async function executeRequest({ title, method, url, bodyText, paramType, from, a
   const displayText = formatResultText(result);
 
   if (!isPoll) {
+    lastRespLoading = false;
     sceneData.lastResponse = displayText;
     sceneData.lastResponseName = title;
     sceneData.lastResponseTime = timeStr;
@@ -3611,7 +3654,11 @@ function renderLogsPanel() {
   respLabel.textContent = sceneData.lastResponseName && sceneData.lastResponseTime
     ? `最后响应 · ${sceneData.lastResponseName} · ${sceneData.lastResponseTime}` : "最后响应";
   renderJsonText($("lastRequestSummary"), sceneData.lastRequest || "暂无");
-  renderJsonText($("lastResponseSummary"), sceneData.lastResponse || "暂无");
+  if (lastRespLoading) {
+    $("lastResponseSummary").innerHTML = '<div class="loading-inline"><span class="spinner"></span><span>请求中…</span></div>';
+  } else {
+    renderJsonText($("lastResponseSummary"), sceneData.lastResponse || "暂无");
+  }
   renderLogs();
   fitLogCards();
 }
@@ -3975,16 +4022,17 @@ function bindEvents() {
   $("closeSettingsBtn").addEventListener("click", closeSettingsSheet);
   $("saveSettingsBtn").addEventListener("click", saveSettingsChanges);
   $("addHeaderBtn").addEventListener("click", () => {
-    sceneData.headers.push({ key: "", value: "" });
+    editTarget().headers.push({ key: "", value: "" });
     queueSave();
     renderSettingsLists();
   });
   $("addGlobalBtn").addEventListener("click", () => {
+    const t = editTarget();
     const base = "param";
     let key = base;
     let i = 1;
-    while (Object.prototype.hasOwnProperty.call(sceneData.globals, key)) key = base + (++i);
-    sceneData.globals[key] = "";
+    while (Object.prototype.hasOwnProperty.call(t.globals, key)) key = base + (++i);
+    t.globals[key] = "";
     queueSave();
     renderSettingsLists();
     renderGlobalSummary();
