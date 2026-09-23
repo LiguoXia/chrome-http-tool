@@ -2962,7 +2962,7 @@ function closeCopyEnvMenu() {
 }
 function openCopyEnvMenu() {
   closeCopyEnvMenu();
-  const others = sceneData.environments.filter(e => e.id !== sceneData.currentEnvId);
+  const others = sceneData.environments.filter(e => e.id !== editEnvId());
   if (!others.length) {
     showToast("没有其他环境可复制，请先在环境管理中新增环境", "error");
     return;
@@ -2995,7 +2995,8 @@ function openCopyEnvMenu() {
 }
 async function confirmCopyEnvFrom(srcId) {
   const src = sceneData.environments.find(e => e.id === srcId);
-  const cur = currentEnv();
+  const targetId = editEnvId();
+  const cur = sceneData.environments.find(e => e.id === targetId);
   if (!src || !cur) return;
   const ok = await showDialog({
     title: "复制环境配置",
@@ -3003,16 +3004,22 @@ async function confirmCopyEnvFrom(srcId) {
     confirmText: "复制"
   });
   if (!ok) return;
-  const cfg = sceneData.envConfigs[srcId] || {};
+  // 先把当前生效环境的配置同步到快照，确保源环境配置是最新的
+  syncEnvConfig();
+  const srcCfg = sceneData.envConfigs[srcId] || {};
   const defaults = { defaultUseProxy: true, timeoutMs: 30000, insecure: false };
-  sceneData.envConfigs[sceneData.currentEnvId] = {
-    headers: clone(cfg.headers || []),
-    globals: clone(cfg.globals || {}),
-    settings: { ...defaults, ...clone(cfg.settings || {}) }
+  const newCfg = {
+    headers: clone(srcCfg.headers || []),
+    globals: clone(srcCfg.globals || {}),
+    settings: { ...defaults, ...clone(srcCfg.settings || {}) }
   };
-  sceneData.headers = clone(cfg.headers || []);
-  sceneData.globals = clone(cfg.globals || {});
-  sceneData.settings = { ...defaults, ...clone(cfg.settings || {}) };
+  // 写入编辑目标环境：写入快照；若目标为当前生效环境，同步 sceneData
+  sceneData.envConfigs[targetId] = newCfg;
+  if (targetId === sceneData.currentEnvId) {
+    sceneData.headers = newCfg.headers;
+    sceneData.globals = newCfg.globals;
+    sceneData.settings = newCfg.settings;
+  }
   queueSave();
   renderSettingsLists();
   refreshSettingsControls();
