@@ -2613,8 +2613,12 @@ function updateActionCardUi(actionId, fb) {
   if (btn) {
     btn.classList.remove("is-loading", "is-success", "is-error");
     if (status) btn.classList.add("is-" + status);
-    if (status === "loading") { btn.textContent = "发送中"; btn.disabled = true; }
-    else { btn.textContent = status === "success" ? "成功" : status === "error" ? "重试" : "发送"; btn.disabled = false; }
+    if (status === "loading") {
+      if (!btn.dataset.originalLabel) btn.dataset.originalLabel = btn.textContent; // 记录原始「发送」，供完成后恢复
+      btn.textContent = "发送中"; btn.disabled = true;
+    } else {
+      btn.textContent = status === "success" ? "成功" : status === "error" ? "重试" : "发送"; btn.disabled = false;
+    }
   }
   const chip = card.querySelector(".act-chip");
   if (status) {
