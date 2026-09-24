@@ -315,7 +315,6 @@ body.resizing iframe{pointer-events:none}
 .chip-red{color:var(--red);background:var(--red-soft)}
 .chip-gray{color:var(--secondary);background:var(--fill-gray)}
 .chip-orange{color:#C93400;background:var(--orange-soft)}
-.act-chip{min-width:52px;justify-content:center}
 
 /* ---------- 新增卡片 / 全局变量 ---------- */
 .add-card{
@@ -2477,7 +2476,6 @@ function renderActions() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5.5" r="1.7"/><circle cx="15" cy="5.5" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18.5" r="1.7"/><circle cx="15" cy="18.5" r="1.7"/></svg>
           </button>
         </div>
-        ${fbStatus ? `<span class="chip act-chip ${fbStatus === "loading" ? "chip-blue" : fbStatus === "success" ? "chip-green" : "chip-red"}">${fbStatus === "loading" ? "发送中" : fbStatus === "success" ? "已成功" : "失败"}</span>` : ""}
       </div>`;
     list.appendChild(card);
     card.addEventListener("contextmenu", (e) => {
@@ -2620,20 +2618,6 @@ function updateActionCardUi(actionId, fb) {
     } else {
       btn.textContent = status === "success" ? "成功" : status === "error" ? "重试" : "发送"; btn.disabled = false;
     }
-  }
-  const chip = card.querySelector(".act-chip");
-  if (status) {
-    if (chip) {
-      chip.className = "chip act-chip " + (status === "loading" ? "chip-blue" : status === "success" ? "chip-green" : "chip-red");
-      chip.textContent = status === "loading" ? "发送中" : status === "success" ? "已成功" : "失败";
-    } else {
-      const span = document.createElement("span");
-      span.className = "chip act-chip " + (status === "loading" ? "chip-blue" : status === "success" ? "chip-green" : "chip-red");
-      span.textContent = status === "loading" ? "发送中" : status === "success" ? "已成功" : "失败";
-      card.querySelector(".action-side").appendChild(span);
-    }
-  } else if (chip) {
-    chip.remove();
   }
 }
 
