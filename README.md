@@ -22,6 +22,7 @@
 | 版本 | 要求 |
 | --- | --- |
 | Windows 客户端（推荐） | Windows 10 / 11 + Edge WebView2 运行时（Win10/11 通常已内置） |
+| macOS 客户端 | macOS 10.13+，Intel 芯片 / Apple 芯片（M 系列）双版本 |
 | 浏览器版（Windows） | Node.js ≥ 16 |
 | 浏览器版（macOS） | Node.js ≥ 16 |
 
@@ -33,7 +34,16 @@
 2. 双击 `HttpTool-Client.exe` 即可使用
 3. 数据自动保存在 exe 同级的 `data` 目录，拷贝 exe 到任何 Windows 电脑都能直接运行
 
-### 方式二：浏览器版（源码运行）
+### 方式二：macOS 客户端（零依赖）
+
+1. 到 [Releases](../../releases) 下载对应的 dmg / zip：
+   - **Apple 芯片（M1/M2/M3…）** → `HttpTool-*-mac-arm64.dmg`
+   - **Intel 芯片** → `HttpTool-*-mac-x64.dmg`
+2. 打开 dmg 将 `HttpTool.app` 拖入「应用程序」，或解压 zip 后双击 `HttpTool.app`
+3. 首次打开若提示「无法验证开发者」，到「系统设置 → 隐私与安全性」点击「仍要打开」即可
+4. 数据保存在 `~/Library/Application Support/HttpTool/data`（卸载不删数据）
+
+### 方式三：浏览器版（源码运行）
 
 ```bash
 # Windows：双击 start.bat
@@ -70,6 +80,25 @@ dotnet publish -c Release -o dist
 - 页面 `public/index.html` 会同时嵌入 exe（单独拷贝 exe 也能运行），也保留外部文件以便调试
 - 应用图标：`desktop/app-icon.png`（源图）→ `app.ico`（9 尺寸），重建入口 `desktop/make-icon.py`（图形素材来自 Carbon 图标集，Apache-2.0 许可）
 
+### macOS 客户端（Electron）
+
+复用浏览器版 `server.js` + `public/index.html`，主进程 fork 本地服务、渲染进程加载页面。
+
+```bash
+cd macos
+npm install
+# 打包单架构
+npm run build:x64     # Intel 芯片
+npm run build:arm64   # Apple 芯片
+# 产物：macos/dist/HttpTool-*-mac-{x64,arm64}.dmg / .zip
+```
+
+发布说明：
+
+- 双架构（x64 + arm64）由 GitHub Actions 的 `macos-latest` runner 自动构建，推送 `v*` 标签即触发并发布 Release
+- 数据目录通过 `HTTP_TOOL_DATA_DIR` 环境变量指向用户目录，`.app` 只读不影响落盘
+- 应用图标：`macos/build/icon.png`（源自 `app-icon/render-1024.png`，1024 透明 PNG）
+
 ### 数据格式
 
 - 索引文件：`data/index.json`（场景元信息、分组、UI 布局偏好）
@@ -102,6 +131,10 @@ chrome-http-tool/
 │   ├── app-icon.png       # 应用图标（1024）
 │   ├── app.ico            # 多尺寸图标
 │   └── make-icon.py       # 图标重建脚本
+├── macos/                 # macOS 客户端（Electron）
+│   ├── package.json       # electron-builder 打包配置（x64 / arm64）
+│   ├── main.js            # 主进程：fork server.js + 窗口
+│   └── build/icon.png     # 应用图标
 └── data/                  # 用户数据（运行时自动创建，不入库）
     ├── index.json
     └── scenes/

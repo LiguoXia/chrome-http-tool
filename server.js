@@ -14,7 +14,7 @@ const { URL } = require("url");
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
-const DATA_DIR = path.join(ROOT, "data");
+const DATA_DIR = process.env.HTTP_TOOL_DATA_DIR || path.join(ROOT, "data");
 const SCENES_DIR = path.join(DATA_DIR, "scenes");
 const INDEX_FILE = path.join(DATA_DIR, "index.json");
 const PORT = Number(process.env.PORT) || Number(process.argv[2]) || 8787;

@@ -10,6 +10,10 @@ desktop/obj/
 desktop/dist/
 desktop/.webview2/
 
+# Electron 构建产物
+macos/node_modules/
+macos/dist/
+
 # 调试文件
 *.pdb
 *.user

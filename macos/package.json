@@ -1,0 +1,51 @@
+{
+  "name": "http-tool-macos",
+  "version": "1.5.0",
+  "private": true,
+  "description": "HTTP 接口调用与触发工具 macOS 版（Intel / Apple 芯片）",
+  "main": "main.js",
+  "author": "LiguoXia",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --mac",
+    "build:x64": "electron-builder --mac --x64",
+    "build:arm64": "electron-builder --mac --arm64"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.xiali.http-tool",
+    "productName": "HttpTool",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js"
+    ],
+    "extraResources": [
+      {
+        "from": "../server.js",
+        "to": "server/server.js"
+      },
+      {
+        "from": "../public",
+        "to": "server/public"
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+    }
+  }
+}
