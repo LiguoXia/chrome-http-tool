@@ -85,7 +85,7 @@ button:disabled{cursor:not-allowed;opacity:.55}
   color:#fff;
   box-shadow:0 2px 8px rgba(0,113,227,.35);
 }
-.brand{min-width:0}
+.brand{min-width:0;flex:1}
 .brand strong{display:block;font-size:15px;font-weight:700;letter-spacing:-.01em}
 .brand span{display:block;font-size:11.5px;color:var(--tertiary);margin-top:1px}
 .scene-section{flex:1;min-height:0;display:flex;flex-direction:column;padding:4px 12px 12px}
@@ -147,6 +147,15 @@ button:disabled{cursor:not-allowed;opacity:.55}
 .foot-btn:active{transform:scale(.95)}
 .foot-note{font-size:11px;color:var(--tertiary);margin-top:9px;line-height:1.5}
 #sceneSelect{display:none}
+
+/* ---------- 侧边栏收起 ---------- */
+.sidebar-collapsed-strip{display:none;height:100%;flex:1;min-height:0;align-items:center;justify-content:center}
+.app.sidebar-collapsed{grid-template-columns:46px 0 minmax(0,1fr)}
+.app.sidebar-collapsed .sidebar-collapsed-strip{display:flex}
+.app.sidebar-collapsed .sidebar-head,
+.app.sidebar-collapsed .scene-section,
+.app.sidebar-collapsed .sidebar-foot,
+.app.sidebar-collapsed .sidebar-resize{display:none}
 
 /* ---------- 主区域 ---------- */
 .main{display:flex;flex-direction:column;min-width:0;min-height:0}
@@ -912,7 +921,10 @@ body.action-dragging{cursor:grabbing}
 }
 @media (max-width:920px){
   .app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .app.sidebar-collapsed{grid-template-columns:1fr}
   .sidebar-resize{display:none}
+  .sidebar-collapsed-strip{display:none!important}
+  #collapseSidebarBtn{display:none}
   .sidebar{flex-direction:row;align-items:center;gap:12px;padding:10px 14px;border-right:none;border-bottom:1px solid var(--sep);overflow:hidden}
   .sidebar-head{padding:0}
   .brand span{display:none}
@@ -957,6 +969,12 @@ body.action-dragging{cursor:grabbing}
 <div class="app" id="appRoot">
   <!-- ==================== 左侧：场景管理 ==================== -->
   <aside class="sidebar">
+    <div class="sidebar-collapsed-strip">
+      <button class="expand-btn" id="expandSidebarBtn" title="展开场景栏">
+        <span class="strip-text">场景管理</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+    </div>
     <div class="sidebar-head">
       <div class="app-badge">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4.5 13.5h5L9.5 22 18 10.5h-5L13 2Z"/></svg>
@@ -965,6 +983,9 @@ body.action-dragging{cursor:grabbing}
         <strong>接口控制台</strong>
         <span>HTTP 调试与演示</span>
       </div>
+      <button class="icon-btn collapse-btn" id="collapseSidebarBtn" title="收起场景栏，贴到左侧">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg>
+      </button>
     </div>
     <div class="scene-section">
       <div class="section-label-row">
@@ -1440,7 +1461,8 @@ body.action-dragging{cursor:grabbing}
           ② 顶栏切换环境，每个环境有独立的请求头、全局变量与请求选项；<br/>
           ③ 新增接口或从 curl 导入，点「发送」立即调试；<br/>
           ④ 右键接口卡片可复制为 cmd / bash curl 命令；<br/>
-          ⑤ 轮询面板可单独配置、收起/展开。
+          ⑤ 轮询面板可单独配置、收起/展开；<br/>
+          ⑥ 左侧场景栏与右侧轮询面板均可收起，为主区域腾出空间。
         </p>
       </div>
       <div class="help-block">
@@ -3842,6 +3864,18 @@ function setPollCollapsed(collapsed, silent) {
     API.saveUI(meta.ui);
   }
 }
+function setSidebarCollapsed(collapsed, silent) {
+  const appEl = $("appRoot");
+  if (!appEl) return;
+  appEl.classList.toggle("sidebar-collapsed", collapsed);
+  // 收起/展开后主区域宽度变化，重算动态高度
+  setTimeout(() => { fitLogCards(); fitPollResultBox(); }, 320);
+  if (!silent) {
+    meta.ui = meta.ui || {};
+    meta.ui.collapsedSidebar = collapsed;
+    API.saveUI(meta.ui);
+  }
+}
 function persistPanelWidths() {
   const grid = $("contentGrid");
   const w1 = parseInt(grid.querySelector(".action-panel").style.width, 10);
@@ -3862,6 +3896,7 @@ function initUILayout() {
     $("appRoot").style.setProperty("--sidebar-w", ui.sidebarWidth + "px");
   }
   setPollCollapsed(!!ui.collapsedPoll, true);
+  setSidebarCollapsed(!!ui.collapsedSidebar, true);
   const logCountSel = $("logShowCount");
   if (logCountSel) {
     logCountSel.value = String(maxLogCount());
@@ -4163,6 +4198,8 @@ function bindEvents() {
   });
   $("collapsePollBtn").addEventListener("click", () => setPollCollapsed(true));
   $("expandPollBtn").addEventListener("click", () => setPollCollapsed(false));
+  $("collapseSidebarBtn").addEventListener("click", () => setSidebarCollapsed(true));
+  $("expandSidebarBtn").addEventListener("click", () => setSidebarCollapsed(false));
   initResizeHandles();
   initSidebarResize();
   $("stopPollBtn").addEventListener("click", (e) => {

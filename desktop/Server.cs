@@ -933,6 +933,7 @@ internal sealed class AppServer
                 int sw = Int(u["sidebarWidth"], 0);
                 if (sw >= 160) ui["sidebarWidth"] = sw;
                 if (u["collapsedPoll"] is JsonValue cv && cv.TryGetValue<bool>(out var collapsed)) ui["collapsedPoll"] = collapsed;
+                if (u["collapsedSidebar"] is JsonValue cvs && cvs.TryGetValue<bool>(out var collapsedS)) ui["collapsedSidebar"] = collapsedS;
                 WriteIndex(idx);
                 await WriteJson(ctx, 200, ui.DeepClone());
                 return;

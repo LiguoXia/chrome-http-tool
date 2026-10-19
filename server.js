@@ -599,6 +599,7 @@ const server = http.createServer((req, res) => {
         if (typeof u.pollWidth === "number" && u.pollWidth >= 200) idx.ui.pollWidth = Math.round(u.pollWidth);
         if (typeof u.sidebarWidth === "number" && u.sidebarWidth >= 160) idx.ui.sidebarWidth = Math.round(u.sidebarWidth);
         if (typeof u.collapsedPoll === "boolean") idx.ui.collapsedPoll = u.collapsedPoll;
+        if (typeof u.collapsedSidebar === "boolean") idx.ui.collapsedSidebar = u.collapsedSidebar;
         writeIndex(idx);
         return json(res, 200, idx.ui);
       });
