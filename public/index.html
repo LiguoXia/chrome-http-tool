@@ -150,7 +150,7 @@ button:disabled{cursor:not-allowed;opacity:.55}
 
 /* ---------- 侧边栏收起 ---------- */
 .sidebar-collapsed-strip{display:none;height:100%;flex:1;min-height:0;align-items:center;justify-content:center}
-.app.sidebar-collapsed{grid-template-columns:46px 0 minmax(0,1fr)}
+.app.sidebar-collapsed{grid-template-columns:46px minmax(0,1fr)}
 .app.sidebar-collapsed .sidebar-collapsed-strip{display:flex}
 .app.sidebar-collapsed .sidebar-head,
 .app.sidebar-collapsed .scene-section,
@@ -922,6 +922,9 @@ body.action-dragging{cursor:grabbing}
 @media (max-width:920px){
   .app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
   .app.sidebar-collapsed{grid-template-columns:1fr}
+  .app.sidebar-collapsed .sidebar-head,
+  .app.sidebar-collapsed .scene-section,
+  .app.sidebar-collapsed .sidebar-foot{display:flex}
   .sidebar-resize{display:none}
   .sidebar-collapsed-strip{display:none!important}
   #collapseSidebarBtn{display:none}
