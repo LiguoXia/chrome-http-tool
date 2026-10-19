@@ -1,4 +1,4 @@
-name: Build macOS
+name: Build Release
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  macos:
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -44,8 +44,42 @@ jobs:
             macos/dist/*.zip
           if-no-files-found: error
 
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish
+        run: |
+          cd desktop
+          dotnet publish -c Release -o publish
+
+      - name: Package
+        shell: pwsh
+        run: |
+          cd desktop
+          $tag = "${{ github.ref_name }}"
+          Rename-Item "publish\HttpTool.exe" "HttpTool-Client.exe"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $items = @("publish\HttpTool-Client.exe")
+          if (Test-Path "publish/public") { $items += "publish/public" }
+          Compress-Archive -Path $items -DestinationPath "dist/HttpTool-Client-$tag-win-x64.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: desktop/dist/HttpTool-Client-*.zip
+          if-no-files-found: error
+
   release:
-    needs: build
+    needs: [macos, windows]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
@@ -62,4 +96,5 @@ jobs:
             release/macos-x64/*.zip
             release/macos-arm64/*.dmg
             release/macos-arm64/*.zip
+            release/windows-x64/*.zip
           generate_release_notes: true
